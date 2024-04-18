@@ -54,6 +54,13 @@ func parseQuery(query string) (path []string, selectF selectFunc, setArgsF setAr
 		}
 
 		path = path[:len(path)-1]
+
+	case path[len(path)-1] == "*?":
+		selectF = func(ctx *Context) bool {
+			return true
+		}
+
+		path = path[:len(path)-1]
 	
 	case strings.HasPrefix(path[len(path)-1], ":"):
 		key := strings.TrimLeft(path[len(path)-1], ":")

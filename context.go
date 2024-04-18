@@ -8,6 +8,7 @@ import (
 )
 
 type Context struct {
+	dm             *DomainMux
 	host           string
 	path           []string
 	args           map[string]string
@@ -17,17 +18,33 @@ type Context struct {
 }
 
 func newContext(dm *DomainMux, host string) *Context {
-	path := append(strings.Split(host, "."), "")
-	slices.Reverse(path)
-
 	ctx := &Context{
-		host: host,
-		path: path,
+		dm: dm,
 		args: make(map[string]string),
-		node: dm.root,
 		calledHandlers: make(map[*handler]struct{}),
 	}
+
+	ctx.setup(host)
 	return ctx
+}
+
+func (ctx *Context) setup(host string) {
+	ctx.host = host
+
+	ctx.path = append(strings.Split(host, "."), "")
+	slices.Reverse(ctx.path)
+
+	ctx.node = ctx.dm.root
+}
+
+func (ctx *Context) Path() []string {
+	cp := make([]string, len(ctx.path))
+	copy(cp, ctx.path)
+	return cp
+}
+
+func (ctx *Context) DomainMux() *DomainMux {
+	return ctx.dm
 }
 
 func (ctx *Context) Host() string {
@@ -48,8 +65,15 @@ func (ctx *Context) Value(key string) (string, bool) {
 	return value, ok
 }
 
-func (ctx *Context) Redirect(host string) {
-	
+func (ctx *Context) SetValue(key, value string) {
+	ctx.args[key] = value
+}
+
+func (ctx *Context) Redirect(host string, rerun bool) {
+	ctx.setup(host)
+	if rerun {
+		clear(ctx.calledHandlers)
+	}
 }
 
 func (ctx *Context) next() *handler {
@@ -60,7 +84,6 @@ func (ctx *Context) next() *handler {
 		if _, ok := ctx.calledHandlers[h]; !ok {
 			ctx.calledHandlers[h] = struct{}{}
 		} else {
-			fmt.Println("Skipping handler")
 			h = ctx.next()
 		}
 
