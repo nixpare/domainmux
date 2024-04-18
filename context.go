@@ -1,17 +1,19 @@
 package domainmux
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 )
 
 type Context struct {
-	host       string
-	path       []string
-	args       map[string]string
-	node       *node
-	handlers   []*handler
+	host           string
+	path           []string
+	args           map[string]string
+	node           *node
+	handlers       []*handler
+	calledHandlers map[*handler]struct{}
 }
 
 func newContext(dm *DomainMux, host string) *Context {
@@ -23,6 +25,7 @@ func newContext(dm *DomainMux, host string) *Context {
 		path: path,
 		args: make(map[string]string),
 		node: dm.root,
+		calledHandlers: make(map[*handler]struct{}),
 	}
 	return ctx
 }
@@ -45,10 +48,22 @@ func (ctx *Context) Value(key string) (string, bool) {
 	return value, ok
 }
 
+func (ctx *Context) Redirect(host string) {
+	
+}
+
 func (ctx *Context) next() *handler {
 	if len(ctx.handlers) > 0 {
 		h := ctx.handlers[0]
 		ctx.handlers = ctx.handlers[1:]
+
+		if _, ok := ctx.calledHandlers[h]; !ok {
+			ctx.calledHandlers[h] = struct{}{}
+		} else {
+			fmt.Println("Skipping handler")
+			h = ctx.next()
+		}
+
 		return h
 	}
 
