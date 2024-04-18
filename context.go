@@ -1,7 +1,6 @@
 package domainmux
 
 import (
-	"fmt"
 	"net/http"
 	"slices"
 	"strings"
