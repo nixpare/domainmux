@@ -15,23 +15,34 @@ type (
 
 type handler struct {
 	h        Handler
-	selectF  selectFunc
-	setArgsF setArgsFunc
+	selectF  []selectFunc
+	setArgsF []setArgsFunc
 }
 
 func (h *handler) call(ctx *Context, w http.ResponseWriter, r *http.Request) {
-	if !h.selectF(ctx) {
-		return
+	for _, selectF := range h.selectF {
+		if !selectF(ctx) {
+			return
+		}
 	}
 
-	if h.setArgsF != nil {
-		h.setArgsF(ctx)
+	for _, setArgsF := range h.setArgsF {
+		setArgsF(ctx)
 	}
 
 	h.h(ctx, w, r)
 }
 
-func parseQuery(query string) (path []string, selectF selectFunc, setArgsF setArgsFunc) {
+func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []setArgsFunc) {
+	if query == "*" {
+		selectF = append(selectF, func(ctx *Context) bool {
+			return len(ctx.path) != 0
+		})
+
+		path = nil
+		return
+	}
+
 	if strings.HasPrefix(query, "...") {
 		path = strings.Split(strings.TrimLeft(query, "."), ".")
 		path[0] = "..." + path[0]
@@ -39,87 +50,87 @@ func parseQuery(query string) (path []string, selectF selectFunc, setArgsF setAr
 		path = strings.Split(query, ".")
 	}
 	slices.Reverse(path)
-	
-	switch {
-	case query == "*":
-		selectF = func(ctx *Context) bool {
-			return len(ctx.path) != 0
-		}
 
-		path = nil
-		
-	case path[len(path)-1] == "*":
-		selectF = func(ctx *Context) bool {
-			return len(ctx.path) != 0
-		}
+	endPath := len(path)
 
-		path = path[:len(path)-1]
-
-	case path[len(path)-1] == "*?":
-		selectF = func(ctx *Context) bool {
-			return true
-		}
-
-		path = path[:len(path)-1]
-	
-	case strings.HasPrefix(path[len(path)-1], ":"):
-		key := strings.TrimLeft(path[len(path)-1], ":")
-
-		if strings.HasSuffix(path[len(path)-1], "?") {
-			key = strings.TrimRight(key, "?")
-
-			selectF = func(ctx *Context) bool {
-				return len(ctx.path) == 1 || len(ctx.path) == 0
-			}
-		} else {
-			selectF = func(ctx *Context) bool {
-				return len(ctx.path) == 1
-			}
-		}
-
-		if key != "_" {
-			setArgsF = func(ctx *Context) {
-				if len(ctx.path) == 1 {
-					ctx.args[key] = ctx.path[0]
-				} else {
-					ctx.args[key] = ""
-				}
-			}
-		}
-
-		path = path[:len(path)-1]
-
-	case strings.HasPrefix(path[len(path)-1], "..."):
-		key := strings.TrimLeft(path[len(path)-1], ".")
-
-		if strings.HasSuffix(path[len(path)-1], "?") {
-			key = strings.TrimRight(key, "?")
-
-			selectF = func(ctx *Context) bool {
-				return true
-			}
-		} else {
-			selectF = func(ctx *Context) bool {
+	for i, p := range path {
+		switch {			
+		case p == "*" && i == len(path)-1:
+			selectF = append(selectF, func(ctx *Context) bool {
 				return len(ctx.path) != 0
-			}
-		}
-
-		if key != "_" {
-			setArgsF = func(ctx *Context) {
-				pathCopy := make([]string, len(ctx.path))
-				copy(pathCopy, ctx.path)
-				slices.Reverse(pathCopy)
-				ctx.args[key] = strings.Join(pathCopy, ".")
-			}
-		}
-
-		path = path[:len(path)-1]
+			})
+	
+			endPath --
+	
+		case p == "*?" && i == len(path)-1:
+			selectF = append(selectF, func(ctx *Context) bool {
+				return true
+			})
+	
+			endPath --
 		
-	default:
-		selectF = func(ctx *Context) bool {
-			return len(ctx.path) == 0
+		case strings.HasPrefix(p, ":"):
+			key := strings.TrimLeft(p, ":")
+			index := i
+	
+			if strings.HasSuffix(p, "?") {
+				key = strings.TrimRight(key, "?")
+	
+				selectF = append(selectF, func(ctx *Context) bool {
+					return len(ctx.path) == 1 || len(ctx.path) == 0
+				})
+			} else {
+				selectF = append(selectF, func(ctx *Context) bool {
+					return len(ctx.path) >= index
+				})
+			}
+	
+			if key != "_" {
+				setArgsF = append(setArgsF, func(ctx *Context) {
+					if len(ctx.path) >= index {
+						println(index, ctx.path[index])
+						ctx.args[key] = ctx.path[index]
+					} else {
+						ctx.args[key] = ""
+					}
+				})
+			}
+	
+			endPath --
+	
+		case strings.HasPrefix(p, "...") && i == len(path)-1:
+			key := strings.TrimLeft(p, ".")
+	
+			if strings.HasSuffix(p, "?") {
+				key = strings.TrimRight(key, "?")
+	
+				selectF = append(selectF, func(ctx *Context) bool {
+					return true
+				})
+			} else {
+				selectF = append(selectF, func(ctx *Context) bool {
+					return len(ctx.path) != 0
+				})
+			}
+	
+			if key != "_" {
+				setArgsF = append(setArgsF, func(ctx *Context) {
+					pathCopy := make([]string, len(ctx.path))
+					copy(pathCopy, ctx.path)
+					slices.Reverse(pathCopy)
+					ctx.args[key] = strings.Join(pathCopy, ".")
+				})
+			}
+	
+			endPath --
+
+		case i == len(path)-1:
+			selectF = append(selectF, func(ctx *Context) bool {
+				return len(ctx.path) == 0
+			})
 		}
 	}
 
+	path = path[:endPath]
 	return 
 }
