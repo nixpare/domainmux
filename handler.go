@@ -69,12 +69,14 @@ func parseQuery(query string) (path []string, selectF selectFunc, setArgsF setAr
 				return len(ctx.path) == 1
 			}
 		}
-		
-		setArgsF = func(ctx *Context) {
-			if len(ctx.path) == 1 {
-				ctx.args[key] = ctx.path[0]
-			} else {
-				ctx.args[key] = ""
+
+		if key != "_" {
+			setArgsF = func(ctx *Context) {
+				if len(ctx.path) == 1 {
+					ctx.args[key] = ctx.path[0]
+				} else {
+					ctx.args[key] = ""
+				}
 			}
 		}
 
@@ -95,11 +97,13 @@ func parseQuery(query string) (path []string, selectF selectFunc, setArgsF setAr
 			}
 		}
 
-		setArgsF = func(ctx *Context) {
-			pathCopy := make([]string, len(ctx.path))
-			copy(pathCopy, ctx.path)
-			slices.Reverse(pathCopy)
-			ctx.args[key] = strings.Join(pathCopy, ".")
+		if key != "_" {
+			setArgsF = func(ctx *Context) {
+				pathCopy := make([]string, len(ctx.path))
+				copy(pathCopy, ctx.path)
+				slices.Reverse(pathCopy)
+				ctx.args[key] = strings.Join(pathCopy, ".")
+			}
 		}
 
 		path = path[:len(path)-1]

@@ -31,8 +31,18 @@ func (ctx *Context) Host() string {
 	return ctx.host
 }
 
-func (ctx *Context) Value(key string) string {
+func (ctx *Context) Param(key string) string {
 	return ctx.args[key]
+}
+
+func (ctx *Context) HasParam(key string) bool {
+	_, ok := ctx.args[key]
+	return ok
+}
+
+func (ctx *Context) Value(key string) (string, bool) {
+	value, ok := ctx.args[key]
+	return value, ok
 }
 
 func (ctx *Context) next() *handler {
