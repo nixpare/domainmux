@@ -99,10 +99,10 @@ func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []s
 				index: len(path) - endPath,
 			}
 
-		case strings.HasPrefix(p, ":"):
+		case strings.HasPrefix(p, "$"):
 			paramFound = true
 			e = &paramExpr{
-				key:   strings.TrimLeft(p, ":"),
+				key:   strings.TrimLeft(p, "$"),
 				index: len(path) - endPath,
 			}
 
