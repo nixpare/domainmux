@@ -1,6 +1,7 @@
 package domainmux
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -18,8 +19,11 @@ func NewDomainMux() *DomainMux {
 	}
 }
 
-func (dm *DomainMux) Serve(host string, middlewares ...Handler) {
-	path, selectF, setArgsF := parseQuery(host)
+func (dm *DomainMux) Serve(host string, middlewares ...Handler) error {
+	path, selectF, setArgsF, err := parseQuery(host)
+	if err != nil {
+		return fmt.Errorf("invalid query: %w", err)
+	}
 
 	handlers := make([]*handler, 0, len(middlewares))
 	for _, mw := range middlewares {
@@ -31,6 +35,7 @@ func (dm *DomainMux) Serve(host string, middlewares ...Handler) {
 	}
 
 	dm.root.createNode(path, handlers)
+	return nil
 }
 
 func (dm *DomainMux) Execute(host string, w http.ResponseWriter, r *http.Request) {
