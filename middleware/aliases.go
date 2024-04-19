@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/nixpare/domainmux"
 )
@@ -13,8 +14,9 @@ func Aliases(host string, rerun bool, matchF func(host string) bool, aliases ...
 
 	return func(ctx *domainmux.Context, w http.ResponseWriter, r *http.Request) {
 		for _, a := range aliases {
-			if a == ctx.Host() {
-				ctx.Redirect(host, rerun)
+			if index := strings.LastIndex(ctx.Host(), a); index != -1 {
+				redirect := ctx.Host()[:index] + host
+				ctx.Redirect(redirect, rerun)
 				return
 			}
 		}
