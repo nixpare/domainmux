@@ -1,17 +1,15 @@
-package middleware
+package domainmux
 
 import (
 	"net/http"
 	"sync"
-
-	"github.com/nixpare/domainmux"
 )
 
 func isLocalDefault(remoteAddr string) bool {
 	return remoteAddr == "localhost" || remoteAddr == "127.0.0.1" || remoteAddr == "::1"
 }
 
-func RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool) domainmux.Handler {
+func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool) error {
 	lcm := &localClientManager{
 		m: new(sync.RWMutex),
 		clients: make(map[string]offlineClient),
@@ -22,12 +20,12 @@ func RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool) domainmux
 		isLocal = func(remoteAddr string) bool { return false }
 	}
 
-	return func(ctx *domainmux.Context, w http.ResponseWriter, r *http.Request) {
-		remoteAddr := domainmux.SplitAddrPort(r.RemoteAddr)
+	return dm.Serve("*", func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+		remoteAddr := SplitAddrPort(r.RemoteAddr)
 		if isLocal(remoteAddr) || isLocalDefault(remoteAddr) {
 			lcm.handlerLocalQuery(ctx, r)
 		}
-	}
+	})
 }
 
 type offlineClient struct {
@@ -41,9 +39,9 @@ type localClientManager struct {
 	rerun bool
 }
 
-func (lcm *localClientManager) handlerLocalQuery(ctx *domainmux.Context, r *http.Request) {
-	remoteAddr := domainmux.SplitAddrPort(r.RemoteAddr)
-	reqDomain, reqSubdomain := domainmux.SplitDomainSubdomain(ctx.Host())
+func (lcm *localClientManager) handlerLocalQuery(ctx *Context, r *http.Request) {
+	remoteAddr := SplitAddrPort(r.RemoteAddr)
+	reqDomain, reqSubdomain := SplitDomainSubdomain(ctx.Host())
 	domain, subdomain := reqDomain, reqSubdomain
 
 	query := r.URL.Query()
