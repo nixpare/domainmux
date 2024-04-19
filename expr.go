@@ -48,8 +48,14 @@ func (p *paramExpr) selectFopt(ctx *Context) bool {
 }
 
 func (p *paramExpr) setArgsF(ctx *Context) {
-	if p.key != "_" && len(ctx.path) > p.index {
+	if p.key == "_" {
+		return
+	}
+
+	if len(ctx.path) > p.index {
 		ctx.args[p.key] = ctx.path[p.index]
+	} else {
+		delete(ctx.args, p.key)
 	}
 }
 
@@ -77,6 +83,7 @@ func (v *variadicExpr) setArgsF(ctx *Context) {
 
 	length := len(ctx.path) - v.index
 	if length <= 0 {
+		delete(ctx.args, v.key)
 		return
 	}
 
