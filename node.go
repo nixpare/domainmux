@@ -7,14 +7,14 @@ import (
 
 type node struct {
 	path      string
-	mws       []*handler
+	handlers  []*nodeHandler
 	childs    map[string]*node
 	childkeys []string
 }
 
-func (n *node) createNode(path []string, leafMWs []*handler) {
+func (n *node) createNode(path []string, handler *nodeHandler) {
 	if len(path) == 0 {
-		n.mws = append(n.mws, leafMWs...)
+		n.handlers = append(n.handlers, handler)
 		return
 	}
 
@@ -30,15 +30,30 @@ func (n *node) createNode(path []string, leafMWs []*handler) {
 	}
 
 	path = path[1:]
-	next.createNode(path, leafMWs)
+	next.createNode(path, handler)
 }
 
 func (n *node) printNode() string {
 	sb := strings.Builder{}
 	sb.WriteString("Name: ")
 	sb.WriteString(n.path)
-	sb.WriteString(" - Middlewares: ")
-	sb.WriteString(fmt.Sprint(len(n.mws)))
+
+	if n.handlers != nil {
+		var (
+			mwCount int
+			serveFound bool
+		)
+		for _, h := range n.handlers {
+			mwCount += len(h.mws)
+			serveFound = serveFound || h.serveHandler != nil
+		}
+
+		sb.WriteString(" - Middlewares: ")
+		sb.WriteString(fmt.Sprint(mwCount))
+		sb.WriteString(" - ServeFunc: ")
+		sb.WriteString(fmt.Sprint(serveFound))
+	}
+	
 	sb.WriteString(" - Childs (")
 	sb.WriteString(fmt.Sprint(len(n.childkeys)))
 	sb.WriteString("): \n")

@@ -19,32 +19,46 @@ func NewDomainMux() *DomainMux {
 	}
 }
 
-func (dm *DomainMux) Serve(host string, middlewares ...Handler) error {
-	path, selectF, setArgsF, err := parseQuery(host)
-	if err != nil {
-		return fmt.Errorf("invalid query: %w", err)
+func (dm *DomainMux) ServeFunc(host string, serveFunc HandlerFunc, middlewareFuncs ...HandlerFunc) {
+	mws := make([]Handler, 0, len(middlewareFuncs))
+	for _, f := range middlewareFuncs {
+		if f != nil {
+			mws = append(mws, f)
+		}
 	}
 
-	handlers := make([]*handler, 0, len(middlewares))
-	for _, mw := range middlewares {
-		handlers = append(handlers, &handler{
-			h: mw,
-			selectF: selectF,
-			setArgsF: setArgsF,
-		})
+	if serveFunc == nil {
+		dm.Serve(host, nil, mws...)
+	} else {
+		dm.Serve(host, serveFunc, mws...)
 	}
-
-	dm.root.createNode(path, handlers)
-	return nil
 }
 
-func (dm *DomainMux) Execute(host string, w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(dm, host)
-	ctx.Next(w, r)
+func (dm *DomainMux) Serve(host string, serveFunc Handler, middlewares ...Handler) {
+	path, selectF, setArgsF, err := parseQuery(host)
+	if err != nil {
+		panic(fmt.Errorf("invalid query: %w", err))
+	}
+
+	h := &nodeHandler{
+		serveHandler: serveFunc,
+		mws: middlewares,
+		selectF: selectF,
+		setArgsF: setArgsF,
+	}
+
+	dm.root.createNode(path, h)
 }
 
 func (dm *DomainMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	dm.Execute(SplitAddrPort(r.Host), w, r)
+	ctx := newContext(dm, SplitAddrPort(r.Host))
+	ctx.Next(w, r)
+
+	if !ctx.IsServeCalled() {
+		ctx.SetServeCalled()
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(fmt.Sprintf("Host %s not served by this server", ctx.Host())))
+	}
 }
 
 func (dm *DomainMux) String() string {

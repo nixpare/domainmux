@@ -12,15 +12,16 @@ type Context struct {
 	path           []string
 	args           map[string]string
 	node           *node
-	handlers       []*handler
-	calledHandlers map[*handler]struct{}
+	handlers       []*nodeHandler
+	calledHandlers map[*nodeHandler]struct{}
+	serveCalled    bool
 }
 
 func newContext(dm *DomainMux, host string) *Context {
 	ctx := &Context{
 		dm: dm,
 		args: make(map[string]string),
-		calledHandlers: make(map[*handler]struct{}),
+		calledHandlers: make(map[*nodeHandler]struct{}),
 	}
 
 	ctx.setup(host)
@@ -68,6 +69,14 @@ func (ctx *Context) SetValue(key, value string) {
 	ctx.args[key] = value
 }
 
+func (ctx *Context) IsServeCalled() bool {
+	return ctx.serveCalled
+}
+
+func (ctx *Context) SetServeCalled() {
+	ctx.serveCalled = true
+}
+
 func (ctx *Context) Redirect(host string, rerun bool) {
 	ctx.setup(host)
 	if rerun {
@@ -75,7 +84,11 @@ func (ctx *Context) Redirect(host string, rerun bool) {
 	}
 }
 
-func (ctx *Context) next() *handler {
+func (ctx *Context) next() *nodeHandler {
+	if ctx.serveCalled {
+		return nil
+	}
+
 	if len(ctx.handlers) > 0 {
 		h := ctx.handlers[0]
 		ctx.handlers = ctx.handlers[1:]
@@ -93,9 +106,7 @@ func (ctx *Context) next() *handler {
 		return nil
 	}
 
-	if len(ctx.node.mws) > 0 {
-		ctx.handlers = ctx.node.mws
-	}
+	ctx.handlers = ctx.node.handlers
 
 	if len(ctx.path) > 1 {
         ctx.path = ctx.path[1:]

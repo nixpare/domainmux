@@ -5,90 +5,76 @@ import (
 	"sync"
 )
 
-func isLocalDefault(remoteAddr string) bool {
-	return remoteAddr == "localhost" || remoteAddr == "127.0.0.1" || remoteAddr == "::1"
+type localClientManager struct {
+	m *sync.RWMutex
+	clients map[string]string
+	rerun bool
+	isLocal func(remoteAddr string) bool
 }
 
-func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool) error {
-	lcm := &localClientManager{
-		m: new(sync.RWMutex),
-		clients: make(map[string]offlineClient),
-		rerun: rerun,
-	}
-
+func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool) {
 	if isLocal == nil {
 		isLocal = func(remoteAddr string) bool { return false }
 	}
 
-	return dm.Serve("*", func(ctx *Context, w http.ResponseWriter, r *http.Request) {
-		remoteAddr := SplitAddrPort(r.RemoteAddr)
-		if isLocal(remoteAddr) || isLocalDefault(remoteAddr) {
-			lcm.handlerLocalQuery(ctx, r)
-		}
-	})
+	lcm := &localClientManager{
+		m: new(sync.RWMutex),
+		clients: make(map[string]string),
+		rerun: rerun,
+		isLocal: isLocal,
+	}
+
+	dm.Serve("*", nil, lcm)
 }
 
-type offlineClient struct {
-	domain    string
-	subdomain string
-}
-
-type localClientManager struct {
-	m *sync.RWMutex
-	clients map[string]offlineClient
-	rerun bool
-}
-
-func (lcm *localClientManager) handlerLocalQuery(ctx *Context, r *http.Request) {
+func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	remoteAddr := SplitAddrPort(r.RemoteAddr)
-	reqDomain, reqSubdomain := SplitDomainSubdomain(ctx.Host())
-	domain, subdomain := reqDomain, reqSubdomain
+	if !lcm.isLocal(remoteAddr) && !isLocalDefault(remoteAddr) {
+		return
+	}
 
+	domain := ctx.Host()
 	query := r.URL.Query()
 
 	lcm.m.RLock()
-	conf, ok := lcm.clients[remoteAddr]
+	savedDomain, ok := lcm.clients[remoteAddr]
 	lcm.m.RUnlock()
 
 	if ok {
-		domain, subdomain = conf.domain, conf.subdomain
+		domain = savedDomain
 	}
 
 	var updated bool
-
 	if query.Has("domain") {
 		updated = true
 		domain = query.Get("domain")
 	}
 
-	if query.Has("subdomain") {
-		updated = true
-		subdomain = query.Get("subdomain")
-	}
-
-	if (domain == "" || domain == reqDomain) && (subdomain == "" || subdomain == reqSubdomain) {
+	if domain == "" || domain == ctx.Host() {
 		return
 	}
 
-	if subdomain == "" {
-		subdomain = reqSubdomain
+	if !updated {
+		w.Header().Set("Cache-Control", "no-cache")
+		ctx.Redirect(domain, lcm.rerun)
+		return
 	}
-	host := subdomain
+		
+	lcm.m.Lock()
+	lcm.clients[remoteAddr] = domain
+	lcm.m.Unlock()
 
-	if host != "" {
-		host += "."
-	}
+	ctx.SetServeCalled()
 
-	if domain == "" {
-		domain = reqDomain
-	}
-	host += domain
-
-	if updated {
-		lcm.m.Lock()
-		lcm.clients[remoteAddr] = offlineClient{ domain, subdomain }
-		lcm.m.Unlock()
+	query.Del("domain")
+	path := r.URL.Path
+	if encQuery := query.Encode(); encQuery != "" {
+		path += "?" + encQuery
 	}
 
-	ctx.Redirect(host, lcm.rerun)
+	http.Redirect(w, r, path, http.StatusTemporaryRedirect)
+}
+
+func isLocalDefault(remoteAddr string) bool {
+	return remoteAddr == "localhost" || remoteAddr == "127.0.0.1" || remoteAddr == "::1"
 }

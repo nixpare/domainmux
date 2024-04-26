@@ -7,20 +7,41 @@ import (
 	"strings"
 )
 
-type Handler func(ctx *Context, w http.ResponseWriter, r *http.Request)
+type Handler interface {
+	ServeDomainMux(ctx *Context, w http.ResponseWriter, r *http.Request)
+}
+
+type HandlerFunc func(ctx *Context, w http.ResponseWriter, r *http.Request)
+
+func (f HandlerFunc) ServeDomainMux(ctx *Context, w http.ResponseWriter, r *http.Request) {
+	f(ctx, w, r)
+}
+
+func StandardHandler(h http.Handler) Handler {
+	return HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+	})
+}
+
+func StandardHandlerFunc(f http.HandlerFunc) HandlerFunc {
+	return HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+		f(w, r)
+	})
+}
 
 type (
 	selectFunc  func(ctx *Context) bool
 	setArgsFunc func(ctx *Context)
 )
 
-type handler struct {
-	h        Handler
-	selectF  []selectFunc
-	setArgsF []setArgsFunc
+type nodeHandler struct {
+	serveHandler Handler
+	mws          []Handler
+	selectF      []selectFunc
+	setArgsF     []setArgsFunc
 }
 
-func (h *handler) call(ctx *Context, w http.ResponseWriter, r *http.Request) {
+func (h *nodeHandler) call(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	for _, selectF := range h.selectF {
 		if !selectF(ctx) {
 			return
@@ -31,7 +52,14 @@ func (h *handler) call(ctx *Context, w http.ResponseWriter, r *http.Request) {
 		setArgsF(ctx)
 	}
 
-	h.h(ctx, w, r)
+	for _, mw := range h.mws {
+		mw.ServeDomainMux(ctx, w, r)
+	}
+
+	if h.serveHandler != nil && !ctx.IsServeCalled() {
+		ctx.SetServeCalled()
+		h.serveHandler.ServeDomainMux(ctx, w, r)
+	}
 }
 
 func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []setArgsFunc, err error) {
