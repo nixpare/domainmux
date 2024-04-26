@@ -9,10 +9,11 @@ type localClientManager struct {
 	m *sync.RWMutex
 	clients map[string]string
 	rerun bool
+	mw    HandlerFunc
 	isLocal func(remoteAddr string) bool
 }
 
-func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool) {
+func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool, middleware HandlerFunc) {
 	if isLocal == nil {
 		isLocal = func(remoteAddr string) bool { return false }
 	}
@@ -21,6 +22,7 @@ func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun
 		m: new(sync.RWMutex),
 		clients: make(map[string]string),
 		rerun: rerun,
+		mw: middleware,
 		isLocal: isLocal,
 	}
 
@@ -55,8 +57,9 @@ func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWrite
 	}
 
 	if !updated {
-		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Cache-Control", "no-cache")		
 		ctx.Redirect(domain, lcm.rerun)
+		lcm.mw(ctx, w, r)
 		return
 	}
 		
