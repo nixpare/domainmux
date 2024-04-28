@@ -13,7 +13,7 @@ type localClientManager struct {
 	isLocal func(remoteAddr string) bool
 }
 
-func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool, middleware HandlerFunc) {
+func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun bool, middleware HandlerFunc) Handler {
 	if isLocal == nil {
 		isLocal = func(remoteAddr string) bool { return false }
 	}
@@ -26,12 +26,12 @@ func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun
 		isLocal: isLocal,
 	}
 
-	dm.Serve("*", nil, lcm)
+	return lcm
 }
 
 func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	remoteAddr := SplitAddrPort(r.RemoteAddr)
-	if !lcm.isLocal(remoteAddr) && !isLocalDefault(remoteAddr) {
+	if !lcm.isLocal(remoteAddr) && !IsLocalhost(remoteAddr) {
 		return
 	}
 
@@ -78,6 +78,6 @@ func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWrite
 	http.Redirect(w, r, path, http.StatusTemporaryRedirect)
 }
 
-func isLocalDefault(remoteAddr string) bool {
+func IsLocalhost(remoteAddr string) bool {
 	return remoteAddr == "localhost" || remoteAddr == "127.0.0.1" || remoteAddr == "::1"
 }

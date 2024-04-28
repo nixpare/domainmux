@@ -60,9 +60,13 @@ func (ctx *Context) HasParam(key string) bool {
 	return ok
 }
 
-func (ctx *Context) Value(key string) (string, bool) {
-	value, ok := ctx.args[key]
-	return value, ok
+func (ctx *Context) Value(key string) string {
+	return ctx.args[key]
+}
+
+func (ctx *Context) HasValue(key string) bool {
+	_, ok := ctx.args[key]
+	return ok
 }
 
 func (ctx *Context) SetValue(key, value string) {

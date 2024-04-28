@@ -35,10 +35,10 @@ type (
 )
 
 type nodeHandler struct {
-	serveHandler Handler
-	mws          []Handler
-	selectF      []selectFunc
-	setArgsF     []setArgsFunc
+	handler  Handler
+	isServe  bool
+	selectF  []selectFunc
+	setArgsF []setArgsFunc
 }
 
 func (h *nodeHandler) call(ctx *Context, w http.ResponseWriter, r *http.Request) {
@@ -52,14 +52,10 @@ func (h *nodeHandler) call(ctx *Context, w http.ResponseWriter, r *http.Request)
 		setArgsF(ctx)
 	}
 
-	for _, mw := range h.mws {
-		mw.ServeDomainMux(ctx, w, r)
-	}
-
-	if h.serveHandler != nil && !ctx.IsServeCalled() {
+	if h.isServe {
 		ctx.SetServeCalled()
-		h.serveHandler.ServeDomainMux(ctx, w, r)
 	}
+	h.handler.ServeDomainMux(ctx, w, r)
 }
 
 func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []setArgsFunc, err error) {

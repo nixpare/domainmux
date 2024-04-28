@@ -19,35 +19,37 @@ func NewDomainMux() *DomainMux {
 	}
 }
 
-func (dm *DomainMux) ServeFunc(host string, serveFunc HandlerFunc, middlewareFuncs ...HandlerFunc) {
-	mws := make([]Handler, 0, len(middlewareFuncs))
-	for _, f := range middlewareFuncs {
-		if f != nil {
-			mws = append(mws, f)
-		}
-	}
-
-	if serveFunc == nil {
-		dm.Serve(host, nil, mws...)
-	} else {
-		dm.Serve(host, serveFunc, mws...)
-	}
-}
-
-func (dm *DomainMux) Serve(host string, serveFunc Handler, middlewares ...Handler) {
-	path, selectF, setArgsF, err := parseQuery(host)
+func (dm *DomainMux) Serve(pattern string, handler Handler) {
+	path, selectF, setArgsF, err := parseQuery(pattern)
 	if err != nil {
 		panic(fmt.Errorf("invalid query: %w", err))
 	}
 
-	h := &nodeHandler{
-		serveHandler: serveFunc,
-		mws: middlewares,
+	dm.root.createNode(path, &nodeHandler{
+		handler: handler,
+		isServe: true,
 		selectF: selectF,
 		setArgsF: setArgsF,
+	})
+}
+
+func (dm *DomainMux) Middleware(pattern string, middlewares ...Handler) {
+	path, selectF, setArgsF, err := parseQuery(pattern)
+	if err != nil {
+		panic(fmt.Errorf("invalid query: %w", err))
 	}
 
-	dm.root.createNode(path, h)
+	handlers := make([]*nodeHandler, 0, len(middlewares))
+	for _, mw := range middlewares {
+		handlers = append(handlers, &nodeHandler{
+			handler: mw,
+			isServe: false,
+			selectF: selectF,
+			setArgsF: setArgsF,
+		})
+	}
+
+	dm.root.createNode(path, handlers...)
 }
 
 func (dm *DomainMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {

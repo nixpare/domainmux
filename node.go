@@ -12,9 +12,9 @@ type node struct {
 	childkeys []string
 }
 
-func (n *node) createNode(path []string, handler *nodeHandler) {
+func (n *node) createNode(path []string, handlers ...*nodeHandler) {
 	if len(path) == 0 {
-		n.handlers = append(n.handlers, handler)
+		n.handlers = append(n.handlers, handlers...)
 		return
 	}
 
@@ -30,7 +30,7 @@ func (n *node) createNode(path []string, handler *nodeHandler) {
 	}
 
 	path = path[1:]
-	next.createNode(path, handler)
+	next.createNode(path, handlers...)
 }
 
 func (n *node) printNode() string {
@@ -44,8 +44,11 @@ func (n *node) printNode() string {
 			serveFound bool
 		)
 		for _, h := range n.handlers {
-			mwCount += len(h.mws)
-			serveFound = serveFound || h.serveHandler != nil
+			if !h.isServe {
+				mwCount ++
+			}
+			
+			serveFound = serveFound || h.isServe
 		}
 
 		sb.WriteString(" - Middlewares: ")
