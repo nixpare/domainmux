@@ -3,6 +3,7 @@ package domainmux
 import (
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -30,8 +31,24 @@ func newContext(dm *DomainMux, host string) *Context {
 
 func (ctx *Context) setup(host string) {
 	ctx.host = host
+	ctx.path = strings.Split(host, ".")
 
-	ctx.path = append(strings.Split(host, "."), "")
+	for i := 0; i < len(ctx.path) && i < 4; i++ {
+		if _, err := strconv.Atoi(ctx.path[i]); err != nil {
+			break
+		}
+
+		if i == 0 {
+			continue
+		}
+
+		ctx.path[0] = strings.Join(ctx.path[:i+1], ".")
+		copy(ctx.path[1:], ctx.path[i+1:])
+		ctx.path = ctx.path[:len(ctx.path)-1]
+		i--
+	}
+
+	ctx.path = append(ctx.path, "")
 	slices.Reverse(ctx.path)
 
 	ctx.node = ctx.dm.root
