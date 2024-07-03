@@ -5,25 +5,36 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Context struct {
-	dm             *DomainMux
+	dm             *DomainMux // pool management
 	host           string
 	path           []string
-	args           map[string]string
+	args           map[string]string // pool management
 	node           *node
 	handlers       []*nodeHandler
-	calledHandlers map[*nodeHandler]struct{}
-	serveCalled    bool
+	calledHandlers map[*nodeHandler]struct{} // pool management
+	serveCalled    bool // pool management
+}
+
+var contextPool = sync.Pool{
+	New: func() any {
+		return &Context{
+			args: make(map[string]string),
+			calledHandlers: make(map[*nodeHandler]struct{}),
+		}
+	},
 }
 
 func newContext(dm *DomainMux, host string) *Context {
-	ctx := &Context{
-		dm: dm,
-		args: make(map[string]string),
-		calledHandlers: make(map[*nodeHandler]struct{}),
-	}
+	ctx := contextPool.Get().(*Context)
+
+	ctx.dm = dm
+	clear(ctx.args)
+	clear(ctx.calledHandlers)
+	ctx.serveCalled = false
 
 	ctx.setup(host)
 	return ctx
