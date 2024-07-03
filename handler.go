@@ -148,11 +148,11 @@ func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []s
 
 		if isOptional {
 			selectF = append(selectF, e.selectFopt)
+			setArgsF = append(setArgsF, e.setArgsFopt)
 		} else {
 			selectF = append(selectF, e.selectF)
+			setArgsF = append(setArgsF, e.setArgsF)
 		}
-
-		setArgsF = append(setArgsF, e.setArgsF)
 
 		if e.decrementPath() {
 			endPath--

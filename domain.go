@@ -55,7 +55,7 @@ func (dm *DomainMux) Middleware(pattern string, middlewares ...Handler) {
 func (dm *DomainMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(dm, SplitAddrPort(r.Host))
 	defer contextPool.Put(ctx)
-	
+
 	ctx.Next(w, r)
 
 	if !ctx.IsServeCalled() {
