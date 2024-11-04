@@ -5,13 +5,45 @@ import (
 	"testing"
 )
 
+type testData struct {
+	address string
+	result map[string]string
+}
+
 func setParam(ctx *Context, query string, testMap map[string]string) {
 	if ctx.HasValue(query) {
 		testMap[query] = ctx.Value(query)
 	}
 }
 
-func TestMain(t *testing.T) {
+func runChecks(t *testing.T, dm *DomainMux, testMap map[string]string, requests []testData) {
+	t.Helper()
+
+	for _, req := range requests {
+		clear(testMap)
+		dm.ServeHTTP(nil, &http.Request{
+			Host: req.address,
+		})
+
+		for key, expected := range req.result {
+			value, ok := testMap[key]
+			delete(testMap, key)
+			if !ok {
+				t.Errorf("on \"%s\" with param \"%s\" expected \"%s\" but not found", req.address, key, expected)
+				continue
+			}
+			if value != expected {
+				t.Errorf("on \"%s\" with param \"%s\" expected \"%s\" but found \"%s\"", req.address, key, expected, value)
+			}
+		}
+
+		if len(testMap) > 0 {
+			t.Errorf("on \"%s\" found leftovers %v", req.address, testMap)
+		}
+	}
+}
+
+func Test1(t *testing.T) {
 	dm := NewDomainMux()
 
 	testMap := make(map[string]string)
@@ -63,11 +95,6 @@ func TestMain(t *testing.T) {
 		testMap["sub2.test.com"] = "OK"
 	}))
 
-	type testData struct {
-		address string
-		result map[string]string
-	}
-
 	requests := []testData{
 		{ "test.com", map[string]string{
 			"*": "OK", "test.com": "OK",
@@ -114,28 +141,52 @@ func TestMain(t *testing.T) {
 		} },
 	}
 
-	for _, req := range requests {
-		clear(testMap)
-		dm.ServeHTTP(nil, &http.Request{
-			Host: req.address,
-		})
+	runChecks(t, dm, testMap, requests)
+}
 
-		for key, expected := range req.result {
-			value, ok := testMap[key]
-			delete(testMap, key)
-			if !ok {
-				t.Errorf("on \"%s\" with param \"%s\" expected \"%s\" but not found", req.address, key, expected)
-				continue
-			}
-			if value != expected {
-				t.Errorf("on \"%s\" with param \"%s\" expected \"%s\" but found \"%s\"", req.address, key, expected, value)
-			}
-		}
+func Test2(t *testing.T) {
+	dm := NewDomainMux()
 
-		if len(testMap) > 0 {
-			t.Errorf("on \"%s\" found leftovers %v", req.address, testMap)
-		}
+	testMap := make(map[string]string)
+
+	dm.Middleware(
+		"*",
+		HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+			testMap["*"] = "OK"
+		}),
+		dm.RedirectIfLocal(nil, false, func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+			testMap["*"] = testMap["*"] + " but NOT OK"
+		}),
+		HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+			testMap["*"] = testMap["*"] + " double OK"
+		}),
+	)
+
+	dm.Middleware("...domain_and_subdomain?.$tld", HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+		testMap["...domain_and_subdomain?.$tld"] = "OK"
+		setParam(ctx, "tld", testMap)
+		setParam(ctx, "domain_and_subdomain", testMap)
+	}))
+
+	dm.Middleware("...subdomains?.test.$_", HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+		testMap["...subdomains?.test.$_"] = "OK"
+		setParam(ctx, "subdomains", testMap)
+	}))
+
+	dm.Serve("domain1.test.com", HandlerFunc(func(ctx *Context, w http.ResponseWriter, r *http.Request) {
+		testMap["domain1.test.com"] = "OK"
+	}))
+
+	requests := []testData{
+		{ "domain1.test.com", map[string]string{
+			"*": "OK double OK",
+			"...domain_and_subdomain?.$tld": "OK", "tld": "com", "domain_and_subdomain": "domain1.test",
+			"...subdomains?.test.$_": "OK", "subdomains": "domain1",
+			"domain1.test.com": "OK",
+		} },
 	}
+
+	runChecks(t, dm, testMap, requests)
 }
 
 type fakeWriter struct {}

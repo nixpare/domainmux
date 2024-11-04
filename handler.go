@@ -102,6 +102,15 @@ func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []s
 		return
 	}
 
+	for i, p := range path {
+		if strings.HasSuffix(p, "?") {
+			if i != 0 {
+				err = fmt.Errorf("optional query must have the optional parameter as the left-most parameter")
+				return
+			}
+		}
+	}
+
 	slices.Reverse(path)
 	endPath := len(path)
 
@@ -126,8 +135,9 @@ func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []s
 		case strings.HasPrefix(p, "$"):
 			paramFound = true
 			e = &paramExpr{
-				key:   strings.TrimLeft(p, "$"),
-				index: len(path) - endPath,
+				key:         strings.TrimLeft(p, "$"),
+				index:       len(path) - endPath,
+				isLastParam: i == len(path)-1,
 			}
 
 		case strings.HasPrefix(p, "..."):
@@ -142,7 +152,7 @@ func parseQuery(query string) (path []string, selectF []selectFunc, setArgsF []s
 				name:         p,
 				index:        len(path) - endPath,
 				isAfterParam: paramFound,
-				isLast:       i == len(path)-1,
+				isLastParam:  i == len(path)-1,
 			}
 		}
 

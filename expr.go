@@ -13,7 +13,7 @@ type expr interface {
 	setArgsFopt(ctx *Context)
 }
 
-type starExpr struct{
+type starExpr struct {
 	index int
 }
 
@@ -34,8 +34,9 @@ func (s *starExpr) setArgsF(ctx *Context) {}
 func (s *starExpr) setArgsFopt(ctx *Context) {}
 
 type paramExpr struct {
-	key   string
-	index int
+	key         string
+	index       int
+	isLastParam bool
 }
 
 func (p *paramExpr) decrementPath() bool {
@@ -43,11 +44,19 @@ func (p *paramExpr) decrementPath() bool {
 }
 
 func (p *paramExpr) selectF(ctx *Context) bool {
-	return len(ctx.path) == p.index + 1
+	if p.isLastParam {
+		return len(ctx.path) == p.index+1
+	}
+
+	return len(ctx.path) >= p.index+1
 }
 
 func (p *paramExpr) selectFopt(ctx *Context) bool {
-	return len(ctx.path) == p.index + 1 || len(ctx.path) == p.index
+	if p.isLastParam {
+		return len(ctx.path) == p.index+1 || len(ctx.path) == p.index
+	}
+
+	return len(ctx.path) >= p.index
 }
 
 func (p *paramExpr) setArgsF(ctx *Context) {
@@ -136,7 +145,7 @@ type literalExpr struct {
 	name         string
 	index        int
 	isAfterParam bool
-	isLast       bool
+	isLastParam  bool
 }
 
 func (l *literalExpr) decrementPath() bool {
@@ -145,7 +154,7 @@ func (l *literalExpr) decrementPath() bool {
 
 func (l *literalExpr) selectF(ctx *Context) bool {
 	if !l.isAfterParam {
-		if l.isLast {
+		if l.isLastParam {
 			return len(ctx.path) == 0
 		} else {
 			return true
@@ -160,7 +169,7 @@ func (l *literalExpr) selectF(ctx *Context) bool {
 		return false
 	}
 
-	if !l.isLast {
+	if !l.isLastParam {
 		return true
 	}
 
