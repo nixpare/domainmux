@@ -82,5 +82,5 @@ func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWrite
 func IsLocalhost(remoteAddr string) bool {
 	return strings.HasPrefix(remoteAddr, "localhost") ||
 		strings.HasPrefix(remoteAddr, "127.0.0.1") ||
-		strings.HasPrefix(remoteAddr, "::1")
+		strings.HasPrefix(remoteAddr, "::1") || strings.HasPrefix(remoteAddr, "[::1]")
 }
