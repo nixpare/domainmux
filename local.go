@@ -2,6 +2,7 @@ package domainmux
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -31,7 +32,7 @@ func (dm *DomainMux) RedirectIfLocal(isLocal func(remoteAddr string) bool, rerun
 
 func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	remoteAddr := SplitAddrPort(r.RemoteAddr)
-	if !lcm.isLocal(remoteAddr) && !IsLocalhost(remoteAddr) {
+	if !lcm.isLocal(remoteAddr) {
 		return
 	}
 
@@ -79,5 +80,7 @@ func (lcm *localClientManager) ServeDomainMux(ctx *Context, w http.ResponseWrite
 }
 
 func IsLocalhost(remoteAddr string) bool {
-	return remoteAddr == "localhost" || remoteAddr == "127.0.0.1" || remoteAddr == "::1"
+	return strings.HasPrefix(remoteAddr, "localhost") ||
+		strings.HasPrefix(remoteAddr, "127.0.0.1") ||
+		strings.HasPrefix(remoteAddr, "::1")
 }
